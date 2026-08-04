@@ -63,14 +63,14 @@ export async function GET(req: NextRequest) {
     });
 
     if (userSub?.stripeCustomerId) {
-      await stripe.billing.meterEvents.create({
-        eventName: 'api_requests',
-        payload: {
-          value: '1',
-          stripe_customer_id: userSub.stripeCustomerId,
-        },
-      });
-    }
+  await stripe.billing.meterEvents.create({
+    event_name: 'api_requests', // ✅ BENAR (Gunakan event_name)
+    payload: {
+      value: '1',
+      stripe_customer_id: userSub.stripeCustomerId,
+    },
+  });
+}
   } catch (stripeErr) {
     console.error('Stripe Meter Event Error:', stripeErr);
     // Jangan hentikan respon API jika pelaporan Stripe gagal sementara
