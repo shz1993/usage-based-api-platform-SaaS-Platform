@@ -16,7 +16,7 @@
 ## 🌐 Live Demo & Preview
 
 Try the live application:  
-👉 **[https://usage-based-api-platform-saas-platform.vercel.app/](https://usage-based-api-platform-saas-platform.vercel.app/)**
+👉 **[https://usage-based-api-platform-saa-s-plat-tau.vercel.app/](https://usage-based-api-platform-saa-s-plat-tau.vercel.app/)**
 
 ---
 
