@@ -9,6 +9,14 @@ import { subscriptions } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { getDbUser } from '@/lib/auth-user';
 
+// Helper untuk mengambil App URL secara aman
+const getBaseUrl = () => {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    'https://usage-based-api-platform-saa-s-plat-tau.vercel.app'
+  );
+};
+
 /**
  * 1. Action untuk membuat sesi Checkout / Langganan baru via Stripe
  */
@@ -16,7 +24,7 @@ export async function createCheckoutSessionAction() {
   const user = await getDbUser();
   if (!user) throw new Error('Unauthorized');
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = getBaseUrl();
 
   const session = await stripe.checkout.sessions.create({
     payment_method_types: ['card'],
@@ -51,11 +59,12 @@ export async function createCustomerPortalAction() {
     where: eq(subscriptions.userId, userId),
   });
 
+  // Jika belum berlangganan / tidak ada ID Stripe, langsung arahkan ke Checkout
   if (!userSub?.stripeCustomerId) {
-    throw new Error('Belum ada langganan aktif');
+    return createCheckoutSessionAction();
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const baseUrl = getBaseUrl();
 
   // Buat sesi Portal Pelanggan Stripe
   const portalSession = await stripe.billingPortal.sessions.create({
