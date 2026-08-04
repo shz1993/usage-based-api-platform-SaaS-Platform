@@ -1,187 +1,240 @@
+// src/components/api-key-manager.tsx
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  KeyRound,
+  Plus,
+  Copy,
+  Check,
+  ShieldAlert,
+  Loader2,
+  Trash2,
+  Key,
+} from 'lucide-react';
 import { createApiKeyAction, revokeApiKeyAction } from '@/actions/api-key';
-import { Key, Copy, Check, Trash2, ShieldAlert, Plus, Loader2 } from 'lucide-react';
 
-interface ApiKeyItem {
+interface ApiKey {
   id: string;
   name: string;
   keyPrefix: string;
   isRevoked: boolean;
-  createdAt: string | Date; // Menerima ISO string dari server
+  createdAt: Date | string;
 }
 
-export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyItem[] }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+interface ApiKeyManagerProps {
+  initialKeys: ApiKey[];
+}
 
+export function ApiKeyManager({ initialKeys }: ApiKeyManagerProps) {
+  const router = useRouter();
+  const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
   const [keyName, setKeyName] = useState('');
   const [newRawKey, setNewRawKey] = useState<string | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
+  // Handle Create API Key
   const handleCreateKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyName.trim()) return;
 
-    startTransition(async () => {
-      try {
-        const res = await createApiKeyAction(keyName);
+    setIsCreating(true);
+    try {
+      const res = await createApiKeyAction(keyName);
+      if (res?.rawKey) {
         setNewRawKey(res.rawKey);
         setKeyName('');
-        router.refresh(); // <-- Refreshes Server Component Data
-      } catch (err) {
-        alert('Failed to create API Key');
+        router.refresh();
       }
-    });
+    } catch (error) {
+      console.error('Failed to create key:', error);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  const handleCopy = () => {
-    if (!newRawKey) return;
-    navigator.clipboard.writeText(newRawKey);
+  // Handle Revoke API Key
+  const handleRevokeKey = async (id: string) => {
+    setRevokingId(id);
+    try {
+      await revokeApiKeyAction(id);
+      router.refresh();
+    } catch (error) {
+      console.error('Failed to revoke key:', error);
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleRevoke = async (id: string) => {
-    if (confirm('Are you sure you want to revoke this API Key? It will immediately stop working.')) {
-      setRevokingId(id);
-      startTransition(async () => {
-        try {
-          await revokeApiKeyAction(id);
-          router.refresh(); // <-- Refreshes Server Component Data
-        } catch (err) {
-          alert('Failed to revoke API Key');
-        } finally {
-          setRevokingId(null);
-        }
-      });
-    }
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Modal / Alert Pop-up untuk Raw API Key Baru */}
-      {newRawKey && (
-        <div className="p-5 bg-amber-50 border border-amber-200 rounded-xl shadow-sm space-y-3">
-          <div className="flex items-center gap-2 text-amber-800 font-semibold">
-            <ShieldAlert className="w-5 h-5 text-amber-600" />
-            <span>Save your API Key now!</span>
+    <div className="space-y-8 text-slate-100">
+      {/* 🟢 CREATE NEW API KEY SECTION */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 rounded-lg bg-indigo-950/80 border border-indigo-800/40 text-indigo-400">
+            <KeyRound className="w-4 h-4" />
           </div>
-          <p className="text-xs text-amber-700">
-            This key will <strong>NEVER</strong> be shown again. Make sure to copy and store it securely.
-          </p>
-          <div className="flex items-center gap-2 bg-white p-2.5 rounded-lg border border-amber-300">
-            <code className="flex-1 font-mono text-sm text-slate-800 break-all">{newRawKey}</code>
-            <button
-              onClick={handleCopy}
-              className="flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white rounded-md text-xs font-medium hover:bg-slate-800 transition"
-            >
-              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-              {copied ? 'Copied' : 'Copy'}
-            </button>
+          <div>
+            <h3 className="text-base font-bold text-white tracking-tight">
+              Create New API Key
+            </h3>
+            <p className="text-xs text-slate-400">
+              Generate a secret key to authenticate your REST API requests.
+            </p>
           </div>
-          <button
-            onClick={() => setNewRawKey(null)}
-            className="text-xs text-amber-800 underline font-medium hover:text-amber-900"
-          >
-            I have saved my key
-          </button>
         </div>
-      )}
 
-      {/* Form Tambah API Key */}
-      <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-        <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
-          <Key className="w-5 h-5 text-indigo-600" />
-          Create New API Key
-        </h2>
-        <form onSubmit={handleCreateKey} className="flex gap-3 max-w-lg">
+        <form onSubmit={handleCreateKey} className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
-            placeholder="e.g. Production Mobile App"
+            placeholder="e.g. Production Backend, Mobile App Key"
             value={keyName}
             onChange={(e) => setKeyName(e.target.value)}
+            className="flex-1 bg-slate-950/80 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all"
             required
-            disabled={isPending}
-            className="flex-1 px-3.5 py-2 border border-slate-300 rounded-lg text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600 disabled:opacity-50"
           />
           <button
             type="submit"
-            disabled={isPending}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition disabled:opacity-50 flex items-center gap-1.5"
+            disabled={isCreating || !keyName.trim()}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-medium text-xs rounded-xl transition-all shadow-md shadow-indigo-600/20 active:scale-[0.98] whitespace-nowrap"
           >
-            {isPending && !revokingId ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+            {isCreating ? (
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
             ) : (
-              <Plus className="w-4 h-4" />
+              <>
+                <Plus className="w-4 h-4" />
+                <span>Generate Key</span>
+              </>
             )}
-            {isPending && !revokingId ? 'Creating...' : 'Generate Key'}
           </button>
         </form>
-      </section>
+      </div>
 
-      {/* Tabel List API Keys */}
-      <section className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">Your API Keys</h2>
-          <p className="text-xs text-slate-500">Manage and revoke active access keys</p>
+      {/* ⚠️ NEW KEY DISPLAY MODAL / BANNER */}
+      {newRawKey && (
+        <div className="p-5 rounded-2xl bg-amber-950/30 border border-amber-500/30 space-y-3 backdrop-blur-md">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                Save Your Secret API Key
+              </h4>
+              <p className="text-xs text-amber-200/80 mt-0.5">
+                Please copy your API key now. You won't be able to see it again!
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 bg-slate-950 border border-amber-500/20 rounded-xl p-2.5">
+            <code className="flex-1 font-mono text-xs text-amber-300 break-all px-2">
+              {newRawKey}
+            </code>
+            <button
+              onClick={() => copyToClipboard(newRawKey)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded-lg text-xs font-medium transition-colors border border-amber-500/30"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 📋 API KEYS LIST TABLE */}
+      <div className="space-y-4 pt-4 border-t border-slate-800/80">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Key className="w-4 h-4 text-slate-400" />
+            <h3 className="text-sm font-bold text-white tracking-tight">
+              Your API Keys
+            </h3>
+          </div>
+          <span className="text-xs font-medium text-slate-400 bg-slate-950 px-2.5 py-1 rounded-full border border-slate-800">
+            {initialKeys.length} {initialKeys.length === 1 ? 'key' : 'keys'}
+          </span>
         </div>
 
         {initialKeys.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 text-sm">
-            No API keys found. Create your first API key above to start making requests!
+          <div className="text-center py-12 px-4 rounded-2xl border border-dashed border-slate-800/80 bg-slate-950/40">
+            <KeyRound className="w-8 h-8 text-slate-600 mx-auto mb-3" />
+            <p className="text-xs font-medium text-slate-400">No API keys created yet</p>
+            <p className="text-[11px] text-slate-500 mt-1">
+              Create your first secret key above to start connecting your applications.
+            </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm text-slate-700">
-              <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100 text-xs uppercase tracking-wider">
+          <div className="overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-950/40">
+            <table className="w-full text-left text-xs text-slate-300">
+              <thead className="bg-slate-950/80 text-slate-400 font-semibold border-b border-slate-800/80">
                 <tr>
-                  <th className="p-4">Name</th>
-                  <th className="p-4">Key Prefix</th>
-                  <th className="p-4">Created At</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4 text-right">Action</th>
+                  <th className="px-4 py-3">Name</th>
+                  <th className="px-4 py-3">Key Prefix</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3">Created</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-800/60">
                 {initialKeys.map((key) => (
-                  <tr key={key.id} className="hover:bg-slate-50/50 transition">
-                    <td className="p-4 font-medium text-slate-900">{key.name}</td>
-                    <td className="p-4 font-mono text-xs text-slate-600">{key.keyPrefix}</td>
-                    <td className="p-4 text-slate-500 text-xs" suppressHydrationWarning>
+                  <tr
+                    key={key.id}
+                    className="hover:bg-slate-800/30 transition-colors"
+                  >
+                    <td className="px-4 py-3.5 font-medium text-white">
+                      {key.name}
+                    </td>
+                    <td className="px-4 py-3.5 font-mono text-slate-400">
+                      {key.keyPrefix}••••••••
+                    </td>
+                    <td className="px-4 py-3.5">
+                      {key.isRevoked ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-rose-950/80 text-rose-400 border border-rose-800/50">
+                          Revoked
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-950/80 text-emerald-400 border border-emerald-800/50">
+                          Active
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 text-slate-400">
                       {new Date(key.createdAt).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
                       })}
                     </td>
-                    <td className="p-4">
-                      {key.isRevoked ? (
-                        <span className="px-2.5 py-1 text-xs rounded-full bg-rose-100 text-rose-700 font-medium">
-                          Revoked
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700 font-medium">
-                          Active
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right">
+                    <td className="px-4 py-3.5 text-right">
                       {!key.isRevoked && (
                         <button
-                          onClick={() => handleRevoke(key.id)}
-                          disabled={isPending && revokingId === key.id}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
-                          title="Revoke Key"
+                          onClick={() => handleRevokeKey(key.id)}
+                          disabled={revokingId === key.id}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-950/50 rounded-lg transition-colors border border-transparent hover:border-rose-900/50 disabled:opacity-50"
                         >
-                          {isPending && revokingId === key.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-rose-600" />
+                          {revokingId === key.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
                           ) : (
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3 h-3" />
                           )}
+                          <span>Revoke</span>
                         </button>
                       )}
                     </td>
@@ -191,7 +244,7 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyItem[] }) {
             </table>
           </div>
         )}
-      </section>
+      </div>
     </div>
   );
 }
